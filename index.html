@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>紙飛機風洞實驗室</title>
+  <style>
+    :root {
+      --panel: rgba(10, 23, 39, .86);
+      --panel2: rgba(19, 39, 63, .9);
+      --line: rgba(255,255,255,.14);
+      --text: #eef7ff;
+      --muted: #a9bfd2;
+      --accent: #5ee7c4;
+      --warn: #ffd166;
+      --danger: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #07111d; color: var(--text); }
+    #app { position: fixed; inset: 0; }
+    canvas { display:block; width:100%; height:100%; }
+    .topbar {
+      position:absolute; left:16px; right:16px; top:14px;
+      display:flex; justify-content:space-between; align-items:center; gap:12px;
+      pointer-events:none;
+    }
+    .brand, .status {
+      pointer-events:auto;
+      background:var(--panel); border:1px solid var(--line); border-radius:16px;
+      padding:11px 14px; backdrop-filter:blur(12px); box-shadow:0 10px 30px rgba(0,0,0,.25);
+    }
+    .brand h1 { margin:0; font-size:18px; letter-spacing:.5px; }
+    .brand small { display:block; color:var(--muted); margin-top:3px; }
+    .status { display:flex; gap:16px; font-size:13px; }
+    .status b { display:block; font-size:17px; margin-top:2px; }
+    .panel {
+      position:absolute; top:90px; bottom:18px; width:280px;
+      background:var(--panel); border:1px solid var(--line); border-radius:18px;
+      backdrop-filter:blur(12px); box-shadow:0 16px 50px rgba(0,0,0,.3);
+      overflow:auto; padding:15px;
+    }
+    .panel.left { left:16px; }
+    .panel.right { right:16px; width:260px; }
+    h2 { margin:0 0 12px; font-size:15px; }
+    h3 { margin:18px 0 8px; font-size:13px; color:#d7ebff; }
+    label { display:block; font-size:12px; color:var(--muted); margin:11px 0 5px; }
+    .row { display:flex; align-items:center; gap:8px; }
+    input[type=range] { width:100%; accent-color:var(--accent); }
+    .value { min-width:60px; text-align:right; font-variant-numeric:tabular-nums; color:#fff; font-size:12px; }
+    select, button {
+      width:100%; border:1px solid var(--line); color:var(--text);
+      background:var(--panel2); border-radius:10px; padding:9px 10px; font:inherit;
+    }
+    button { cursor:pointer; transition:.18s; }
+    button:hover { transform:translateY(-1px); border-color:rgba(94,231,196,.55); }
+    .button-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+    .primary { background:linear-gradient(135deg,#1d8f7c,#236ea0); font-weight:700; }
+    .danger { background:rgba(255,107,107,.12); }
+    .toggle { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:9px 0; font-size:12px; color:var(--muted); }
+    .toggle input { accent-color:var(--accent); }
+    .legend { margin-top:10px; }
+    .gradient { height:14px; border-radius:999px; background:linear-gradient(90deg,#153cff,#1bc9ff,#38d878,#ffe14b,#ff892f,#ff274b); border:1px solid rgba(255,255,255,.25); }
+    .legend-labels { display:flex; justify-content:space-between; margin-top:4px; font-size:10px; color:var(--muted); }
+    .metric {
+      display:flex; justify-content:space-between; gap:10px; padding:8px 0;
+      border-bottom:1px solid rgba(255,255,255,.07); font-size:12px;
+    }
+    .metric span:last-child { color:white; font-variant-numeric:tabular-nums; }
+    .tip {
+      margin-top:12px; padding:11px; border-radius:12px; border:1px solid rgba(255,209,102,.28);
+      background:rgba(255,209,102,.08); color:#ffe7a8; font-size:12px; line-height:1.5;
+    }
+    .warning {
+      display:none; margin-top:10px; padding:10px; border-radius:10px;
+      background:rgba(255,107,107,.14); border:1px solid rgba(255,107,107,.35); color:#ffd0d0; font-size:12px;
+    }
+    .help {
+      position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
+      padding:8px 12px; border-radius:12px; background:rgba(7,17,29,.72);
+      border:1px solid var(--line); color:var(--muted); font-size:11px; pointer-events:none;
+    }
+    @media (max-width: 900px) {
+      .panel { width:220px; }
+      .panel.right { width:210px; }
+      .status { display:none; }
+    }
+    @media (max-width: 700px) {
+      .panel { top:auto; height:42vh; bottom:8px; width:calc(50% - 12px); padding:10px; border-radius:14px; }
+      .panel.left { left:8px; }
+      .panel.right { right:8px; width:calc(50% - 12px); }
+      .topbar { left:8px; top:8px; right:8px; }
+      .brand small { display:none; }
+      .help { display:none; }
+    }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="topbar">
+  <div class="brand">
+    <h1>紙飛機風洞實驗室</h1>
+    <small>3D 氣流速度、受力與飛行模擬</small>
+  </div>
+  <div class="status">
+    <div>模式<b id="modeText">風洞</b></div>
+    <div>空速<b id="airSpeedTop">8.0 m/s</b></div>
+    <div>攻角<b id="aoaTop">6.0°</b></div>
+  </div>
+</div>
+
+<aside class="panel left">
+  <h2>實驗控制</h2>
+
+  <label>模式</label>
+  <select id="mode">
+    <option value="tunnel">風洞觀察</option>
+    <option value="flight">自由飛行</option>
+  </select>
+
+  <label>紙飛機類型</label>
+  <select id="planeType">
+    <option value="glider">滑翔型</option>
+    <option value="dart">飛鏢型</option>
+    <option value="classic">經典型</option>
+  </select>
+
+  <h3>環境</h3>
+  <label>風速</label>
+  <div class="row"><input id="wind" type="range" min="0" max="20" step="0.1" value="8"><span class="value" id="windV">8.0 m/s</span></div>
+
+  <label>攻角</label>
+  <div class="row"><input id="aoa" type="range" min="-10" max="25" step="0.5" value="6"><span class="value" id="aoaV">6.0°</span></div>
+
+  <label>側風</label>
+  <div class="row"><input id="crosswind" type="range" min="-8" max="8" step="0.1" value="0"><span class="value" id="crosswindV">0.0 m/s</span></div>
+
+  <h3>紙飛機</h3>
+  <label>翼寬</label>
+  <div class="row"><input id="span" type="range" min="0.7" max="1.35" step="0.01" value="1"><span class="value" id="spanV">100%</span></div>
+
+  <label>機頭重量／重心前移</label>
+  <div class="row"><input id="cg" type="range" min="-0.25" max="0.35" step="0.01" value="0.05"><span class="value" id="cgV">+0.05</span></div>
+
+  <label>投擲速度（自由飛行）</label>
+  <div class="row"><input id="throwSpeed" type="range" min="4" max="20" step="0.5" value="11"><span class="value" id="throwV">11.0 m/s</span></div>
+
+  <div class="button-grid">
+    <button class="primary" id="launch">投擲／開始</button>
+    <button id="pause">暫停</button>
+    <button id="slow">慢動作 ×0.25</button>
+    <button class="danger" id="reset">重置</button>
+  </div>
+
+  <h3>顯示</h3>
+  <div class="toggle"><span>彩色氣流粒子</span><input id="showFlow" type="checkbox" checked></div>
+  <div class="toggle"><span>受力箭頭</span><input id="showForces" type="checkbox" checked></div>
+  <div class="toggle"><span>飛行軌跡</span><input id="showTrail" type="checkbox" checked></div>
+</aside>
+
+<aside class="panel right">
+  <h2>即時觀察</h2>
+
+  <div class="metric"><span>相對空速</span><span id="mSpeed">8.00 m/s</span></div>
+  <div class="metric"><span>升力</span><span id="mLift">0.00 N</span></div>
+  <div class="metric"><span>阻力</span><span id="mDrag">0.00 N</span></div>
+  <div class="metric"><span>高度</span><span id="mHeight">2.00 m</span></div>
+  <div class="metric"><span>飛行距離</span><span id="mDistance">0.00 m</span></div>
+  <div class="metric"><span>滯空時間</span><span id="mTime">0.00 s</span></div>
+
+  <h3>氣流速度色階</h3>
+  <div class="legend">
+    <div class="gradient"></div>
+    <div class="legend-labels"><span>慢</span><span>中等</span><span>快</span></div>
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin-top:7px;">藍色代表低速，紅色代表高速；不是溫度。</div>
+
+  <div class="warning" id="stallWarning">⚠ 氣流開始分離：攻角過大，飛機接近失速。</div>
+
+  <div class="tip" id="tip">
+    調整攻角，觀察機翼上方粒子加速，以及升力與阻力的變化。
+  </div>
+
+  <h3>操作方式</h3>
+  <div style="font-size:11px;color:var(--muted);line-height:1.6;">
+    滑鼠拖曳：旋轉視角<br>
+    滾輪：縮放<br>
+    自由飛行模式：設定參數後按「投擲」
+  </div>
+</aside>
+
+<div class="help">此為教學用簡化模型，氣流視覺化並非完整 CFD 計算。</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const app = document.querySelector('#app');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x07111d);
+scene.fog = new THREE.FogExp2(0x07111d, 0.018);
+
+const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 300);
+camera.position.set(9, 6, 10);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0, 1.6, 0);
+controls.minDistance = 4;
+controls.maxDistance = 30;
+
+scene.add(new THREE.HemisphereLight(0xbde5ff, 0x243221, 2.2));
+const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+sun.position.set(7, 12, 5);
+sun.castShadow = true;
+scene.add(sun);
+
+const grid = new THREE.GridHelper(60, 60, 0x40617a, 0x173149);
+grid.position.y = 0;
+scene.add(grid);
+
+const tunnel = new THREE.Group();
+const tunnelMat = new THREE.MeshBasicMaterial({ color:0x4aa8d8, wireframe:true, transparent:true, opacity:.12 });
+const tunnelBox = new THREE.Mesh(new THREE.BoxGeometry(24, 8, 10, 12, 4, 5), tunnelMat);
+tunnelBox.position.set(0,4,0);
+tunnel.add(tunnelBox);
+scene.add(tunnel);
+
+function makePaperPlane(type='glider', spanScale=1) {
+  const group = new THREE.Group();
+  const shape = new THREE.BufferGeometry();
+  let vertices;
+  if (type === 'dart') {
+    vertices = new Float32Array([
+      2.6,0,0,   -1.8,0,1.45,  -0.8,0,0,
+      2.6,0,0,   -0.8,0,0,    -1.8,0,-1.45,
+      2.6,0,0,   -0.8,0,0,     0.2,-.28,0
+    ]);
+  } else if (type === 'classic') {
+    vertices = new Float32Array([
+      2.4,0,0,   -1.7,0,2.05,  -0.65,0,0,
+      2.4,0,0,   -0.65,0,0,   -1.7,0,-2.05,
+      2.4,0,0,   -0.65,0,0,    0.15,-.38,0
+    ]);
+  } else {
+    vertices = new Float32Array([
+      2.0,0,0,   -1.65,0,2.55, -0.95,0,0,
+      2.0,0,0,   -0.95,0,0,   -1.65,0,-2.55,
+      2.0,0,0,   -0.95,0,0,    0.0,-.32,0
+    ]);
+  }
+  const pos = new THREE.BufferAttribute(vertices,3);
+  shape.setAttribute('position',pos);
+  shape.computeVertexNormals();
+
+  const material = new THREE.MeshStandardMaterial({
+    color:0xf5f1dc, side:THREE.DoubleSide, roughness:.72, metalness:0,
+    emissive:0x071018, emissiveIntensity:.08
+  });
+  const mesh = new THREE.Mesh(shape, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.scale.z = spanScale;
+  group.add(mesh);
+
+  const fold = new THREE.LineSegments(
+    new THREE.EdgesGeometry(shape),
+    new THREE.LineBasicMaterial({color:0x6e7c85, transparent:true, opacity:.7})
+  );
+  fold.scale.z = spanScale;
+  group.add(fold);
+  return group;
+}
+
+let plane = makePaperPlane();
+plane.position.set(0,2.3,0);
+plane.rotation.order = 'YXZ';
+scene.add(plane);
+
+const arrowLift = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), plane.position, 2, 0x51e083, .35,.22);
+const arrowDrag = new THREE.ArrowHelper(new THREE.Vector3(-1,0,0), plane.position, 2, 0xff6666, .35,.22);
+const arrowWeight = new THREE.ArrowHelper(new THREE.Vector3(0,-1,0), plane.position, 1.5, 0xb5c2cb, .35,.22);
+scene.add(arrowLift, arrowDrag, arrowWeight);
+
+const particleCount = innerWidth < 700 ? 900 : 2400;
+const positions = new Float32Array(particleCount*3);
+const colors = new Float32Array(particleCount*3);
+const seeds = [];
+for(let i=0;i<particleCount;i++){
+  const x = THREE.MathUtils.randFloat(-12,12);
+  const y = THREE.MathUtils.randFloat(.5,7.5);
+  const z = THREE.MathUtils.randFloat(-4.7,4.7);
+  positions.set([x,y,z],i*3);
+  seeds.push(Math.random()*1000);
+}
+const flowGeo = new THREE.BufferGeometry();
+flowGeo.setAttribute('position',new THREE.BufferAttribute(positions,3));
+flowGeo.setAttribute('color',new THREE.BufferAttribute(colors,3));
+const flowMat = new THREE.PointsMaterial({ size:.055, vertexColors:true, transparent:true, opacity:.92, depthWrite:false });
+const flow = new THREE.Points(flowGeo, flowMat);
+scene.add(flow);
+
+const trailMax = 900;
+const trailPos = new Float32Array(trailMax*3);
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position',new THREE.BufferAttribute(trailPos,3));
+trailGeo.setDrawRange(0,0);
+const trail = new THREE.Line(trailGeo,new THREE.LineBasicMaterial({color:0xffd166,transparent:true,opacity:.9}));
+scene.add(trail);
+let trailCount=0;
+
+const ui = {};
+['mode','planeType','wind','aoa','crosswind','span','cg','throwSpeed','showFlow','showForces','showTrail',
+ 'windV','aoaV','crosswindV','spanV','cgV','throwV','modeText','airSpeedTop','aoaTop',
+ 'mSpeed','mLift','mDrag','mHeight','mDistance','mTime','stallWarning','tip',
+ 'launch','pause','slow','reset'].forEach(id=>ui[id]=document.getElementById(id));
+
+const params = {
+  mode:'tunnel', wind:8, aoa:6, crosswind:0, span:1, cg:.05, throwSpeed:11,
+  paused:false, timeScale:1, flying:false
+};
+
+let velocity = new THREE.Vector3();
+let flightTime=0, distance=0;
+const startPos = new THREE.Vector3(0,2.3,0);
+const clock = new THREE.Clock();
+
+function rebuildPlane(){
+  const oldPos=plane.position.clone(), oldRot=plane.rotation.clone();
+  scene.remove(plane);
+  plane = makePaperPlane(ui.planeType.value, params.span);
+  plane.position.copy(oldPos); plane.rotation.copy(oldRot); plane.rotation.order='YXZ';
+  scene.add(plane);
+}
+
+function updateUI(){
+  params.mode=ui.mode.value;
+  params.wind=+ui.wind.value;
+  params.aoa=+ui.aoa.value;
+  params.crosswind=+ui.crosswind.value;
+  params.span=+ui.span.value;
+  params.cg=+ui.cg.value;
+  params.throwSpeed=+ui.throwSpeed.value;
+  ui.windV.textContent=params.wind.toFixed(1)+' m/s';
+  ui.aoaV.textContent=params.aoa.toFixed(1)+'°';
+  ui.crosswindV.textContent=params.crosswind.toFixed(1)+' m/s';
+  ui.spanV.textContent=Math.round(params.span*100)+'%';
+  ui.cgV.textContent=(params.cg>=0?'+':'')+params.cg.toFixed(2);
+  ui.throwV.textContent=params.throwSpeed.toFixed(1)+' m/s';
+  ui.modeText.textContent=params.mode==='tunnel'?'風洞':'自由飛行';
+  ui.aoaTop.textContent=params.aoa.toFixed(1)+'°';
+  tunnel.visible=params.mode==='tunnel';
+  if(params.mode==='tunnel' && !params.flying){
+    plane.position.set(0,2.3,0);
+    plane.rotation.set(0,0,THREE.MathUtils.degToRad(params.aoa));
+  }
+}
+document.querySelectorAll('input,select').forEach(el=>el.addEventListener('input',()=>{
+  const oldSpan=params.span;
+  updateUI();
+  if(el===ui.span || el===ui.planeType) rebuildPlane();
+}));
+updateUI();
+
+function liftCoefficient(aoaDeg){
+  const stall=15;
+  const a=THREE.MathUtils.degToRad(aoaDeg);
+  if(aoaDeg <= stall) return THREE.MathUtils.clamp(0.18 + 4.5*a, -0.8, 1.45);
+  return Math.max(.25,1.45-(aoaDeg-stall)*.075);
+}
+function dragCoefficient(cl, aoaDeg){
+  return .055 + .09*cl*cl + Math.max(0,Math.abs(aoaDeg)-12)*.012;
+}
+function physics(airspeed, aoaDeg){
+  const rho=1.225;
+  const area=.16*params.span;
+  const cl=liftCoefficient(aoaDeg);
+  const cd=dragCoefficient(cl,aoaDeg);
+  return {
+    cl,cd,
+    lift:.5*rho*airspeed*airspeed*area*cl,
+    drag:.5*rho*airspeed*airspeed*area*cd
+  };
+}
+
+function speedColor(t){
+  t=THREE.MathUtils.clamp(t,0,1);
+  const c=new THREE.Color();
+  if(t<.2)c.lerpColors(new THREE.Color(0x153cff),new THREE.Color(0x1bc9ff),t/.2);
+  else if(t<.45)c.lerpColors(new THREE.Color(0x1bc9ff),new THREE.Color(0x38d878),(t-.2)/.25);
+  else if(t<.7)c.lerpColors(new THREE.Color(0x38d878),new THREE.Color(0xffe14b),(t-.45)/.25);
+  else if(t<.86)c.lerpColors(new THREE.Color(0xffe14b),new THREE.Color(0xff892f),(t-.7)/.16);
+  else c.lerpColors(new THREE.Color(0xff892f),new THREE.Color(0xff274b),(t-.86)/.14);
+  return c;
+}
+
+function updateFlow(dt, airspeed){
+  flow.visible=ui.showFlow.checked;
+  if(!flow.visible)return;
+  const p=flowGeo.attributes.position.array;
+  const c=flowGeo.attributes.color.array;
+  const wind=Math.max(.2, params.mode==='tunnel'?params.wind:airspeed);
+  const aoaRad=THREE.MathUtils.degToRad(params.aoa);
+  const localPlane=plane.position;
+  for(let i=0;i<particleCount;i++){
+    let x=p[i*3], y=p[i*3+1], z=p[i*3+2];
+    const dx=x-localPlane.x, dy=y-localPlane.y, dz=z-localPlane.z;
+    const nearX=Math.abs(dx)<3.2, nearWing=Math.abs(dz)<2.8*params.span;
+    let localSpeed=wind;
+    let bend=0;
+    if(nearX && nearWing){
+      const influence=Math.exp(-(dx*dx)/4.2)*Math.exp(-(dz*dz)/(7*params.span));
+      if(dy>.05){
+        localSpeed*=1+(.22+Math.max(0,params.aoa)*.012)*influence;
+        bend=-Math.sin(aoaRad)*1.1*influence;
+      }else{
+        localSpeed*=1-.12*influence;
+        bend=-Math.sin(aoaRad)*.55*influence;
+      }
+      if(params.aoa>15 && dx<0){
+        bend+=(Math.sin(seeds[i]+performance.now()*.006)*.9)*influence;
+        localSpeed*=.75+Math.random()*.35;
+      }
+    }
+    x += localSpeed*dt*.85;
+    y += bend*dt + Math.sin(seeds[i]+performance.now()*.002)*.006;
+    z += params.crosswind*dt*.16;
+    if(x>12 || y<.2 || y>8 || z>5 || z<-5){
+      x=-12; y=THREE.MathUtils.randFloat(.5,7.5); z=THREE.MathUtils.randFloat(-4.7,4.7);
+    }
+    p.set([x,y,z],i*3);
+    const col=speedColor(localSpeed/Math.max(1,wind*1.35));
+    c.set([col.r,col.g,col.b],i*3);
+  }
+  flowGeo.attributes.position.needsUpdate=true;
+  flowGeo.attributes.color.needsUpdate=true;
+}
+
+function resetFlight(){
+  params.flying=false; flightTime=0; distance=0; trailCount=0;
+  trailGeo.setDrawRange(0,0);
+  plane.position.copy(startPos);
+  plane.rotation.set(0,0,THREE.MathUtils.degToRad(params.aoa));
+  velocity.set(0,0,0);
+}
+ui.launch.onclick=()=>{
+  updateUI();
+  if(params.mode==='tunnel'){
+    params.flying=false;
+    ui.tip.textContent='風洞已啟動：拖曳視角，觀察機翼前緣、上方高速區與後方尾流。';
+  }else{
+    resetFlight();
+    params.flying=true;
+    const a=THREE.MathUtils.degToRad(params.aoa);
+    velocity.set(Math.cos(a)*params.throwSpeed, Math.sin(a)*params.throwSpeed, 0);
+    ui.tip.textContent='飛行中：觀察速度降低後，升力如何改變，以及側風如何讓航線偏移。';
+  }
+};
+ui.pause.onclick=()=>{ params.paused=!params.paused; ui.pause.textContent=params.paused?'繼續':'暫停'; };
+ui.slow.onclick=()=>{ params.timeScale=params.timeScale===1?.25:1; ui.slow.textContent=params.timeScale===1?'慢動作 ×0.25':'恢復正常速度'; };
+ui.reset.onclick=resetFlight;
+
+function updateTrail(){
+  trail.visible=ui.showTrail.checked;
+  if(!trail.visible || !params.flying)return;
+  if(trailCount<trailMax){
+    trailPos.set([plane.position.x,plane.position.y,plane.position.z],trailCount*3);
+    trailCount++;
+  }else{
+    trailPos.copyWithin(0,3);
+    trailPos.set([plane.position.x,plane.position.y,plane.position.z],(trailMax-1)*3);
+  }
+  trailGeo.attributes.position.needsUpdate=true;
+  trailGeo.setDrawRange(0,Math.min(trailCount,trailMax));
+}
+
+function updateForces(f, airspeed){
+  const show=ui.showForces.checked;
+  arrowLift.visible=arrowDrag.visible=arrowWeight.visible=show;
+  if(!show)return;
+  const origin=plane.position.clone();
+  arrowLift.position.copy(origin); arrowDrag.position.copy(origin); arrowWeight.position.copy(origin);
+  arrowLift.setLength(THREE.MathUtils.clamp(f.lift*.22,.35,4),.32,.2);
+  arrowDrag.setLength(THREE.MathUtils.clamp(f.drag*.55,.3,3),.32,.2);
+  arrowWeight.setLength(1.25,.32,.2);
+  const dragDir=(params.mode==='flight'&&velocity.length()>.1)?velocity.clone().normalize().multiplyScalar(-1):new THREE.Vector3(-1,0,0);
+  arrowDrag.setDirection(dragDir);
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  let dt=Math.min(clock.getDelta(),.035)*params.timeScale;
+  if(params.paused)dt=0;
+  controls.update();
+
+  let airspeed=params.wind;
+  let aoaNow=params.aoa;
+  let f=physics(airspeed,aoaNow);
+
+  if(params.mode==='flight' && params.flying && dt>0){
+    const windVec=new THREE.Vector3(params.wind*.08,0,params.crosswind);
+    const relative=velocity.clone().sub(windVec);
+    airspeed=Math.max(.01,relative.length());
+    const flightAngle=THREE.MathUtils.radToDeg(Math.atan2(velocity.y,Math.max(.01,velocity.x)));
+    aoaNow=params.aoa-flightAngle*.18;
+    f=physics(airspeed,aoaNow);
+
+    const mass=.075 + Math.max(0,params.cg)*.045;
+    const forward=relative.clone().normalize();
+    const liftDir=new THREE.Vector3(-forward.y,forward.x,0).normalize();
+    const force=liftDir.multiplyScalar(f.lift)
+      .add(forward.multiplyScalar(-f.drag))
+      .add(new THREE.Vector3(0,-9.81*mass,0))
+      .add(new THREE.Vector3(0,0,params.crosswind*.015));
+    velocity.addScaledVector(force,dt/mass);
+    plane.position.addScaledVector(velocity,dt);
+    plane.rotation.z=THREE.MathUtils.lerp(plane.rotation.z,Math.atan2(velocity.y,velocity.x),.08);
+    plane.rotation.y=THREE.MathUtils.lerp(plane.rotation.y,-velocity.z*.025,.05);
+
+    flightTime+=dt;
+    distance=Math.max(distance,plane.position.x-startPos.x);
+    updateTrail();
+
+    if(plane.position.y<=.08 || plane.position.x>55 || flightTime>25){
+      plane.position.y=Math.max(.08,plane.position.y);
+      params.flying=false;
+      ui.tip.textContent=`飛行結束：距離 ${distance.toFixed(1)} m，滯空 ${flightTime.toFixed(1)} 秒。可改變一個條件後再比較。`;
+    }
+  } else if(params.mode==='tunnel') {
+    plane.rotation.z=THREE.MathUtils.degToRad(params.aoa);
+    airspeed=Math.hypot(params.wind,params.crosswind);
+    f=physics(airspeed,params.aoa);
+  }
+
+  updateFlow(dt||.016,airspeed);
+  updateForces(f,airspeed);
+
+  const stalled=params.aoa>15;
+  ui.stallWarning.style.display=stalled?'block':'none';
+  if(stalled && params.mode==='tunnel') ui.tip.textContent='攻角超過約 15°：上方氣流變得混亂，升力不再持續增加，阻力則快速上升。';
+
+  ui.airSpeedTop.textContent=airspeed.toFixed(1)+' m/s';
+  ui.mSpeed.textContent=airspeed.toFixed(2)+' m/s';
+  ui.mLift.textContent=f.lift.toFixed(2)+' N';
+  ui.mDrag.textContent=f.drag.toFixed(2)+' N';
+  ui.mHeight.textContent=plane.position.y.toFixed(2)+' m';
+  ui.mDistance.textContent=Math.max(0,distance).toFixed(2)+' m';
+  ui.mTime.textContent=flightTime.toFixed(2)+' s';
+
+  renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
