@@ -40,7 +40,7 @@
       overflow:auto; padding:15px;
     }
     .panel.left { left:16px; }
-    .panel.right { right:16px; width:260px; }
+    .panel.right { right:16px; width:310px; }
     h2 { margin:0 0 12px; font-size:15px; }
     h3 { margin:18px 0 8px; font-size:13px; color:#d7ebff; }
     label { display:block; font-size:12px; color:var(--muted); margin:11px 0 5px; }
@@ -66,6 +66,31 @@
       border-bottom:1px solid rgba(255,255,255,.07); font-size:12px;
     }
     .metric span:last-child { color:white; font-variant-numeric:tabular-nums; }
+    .learning-card {
+      margin-top:10px; padding:10px; border-radius:12px;
+      border:1px solid rgba(94,231,196,.25); background:rgba(94,231,196,.07);
+      font-size:12px; line-height:1.55; color:#dffcf5;
+    }
+    .learning-card b { display:block; margin-bottom:4px; color:#ffffff; }
+    .history-card {
+      margin-top:9px; padding:10px; border-radius:12px;
+      border:1px solid rgba(139,183,255,.24); background:rgba(75,112,178,.12);
+      font-size:11px; line-height:1.55; color:#d8e8ff;
+    }
+    .history-card b { color:#ffffff; }
+    .mission-result {
+      margin-top:10px; padding:10px; border-radius:12px; min-height:54px;
+      border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.055);
+      font-size:12px; line-height:1.45; color:#eaf6ff;
+    }
+    .mission-pass { border-color:rgba(94,231,196,.5); background:rgba(94,231,196,.12); }
+    .mission-fail { border-color:rgba(255,209,102,.4); background:rgba(255,209,102,.09); color:#ffe9ad; }
+    .pill-row { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+    .pill {
+      display:inline-flex; align-items:center; border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06); color:#d8eaff; border-radius:999px;
+      padding:4px 8px; font-size:10px;
+    }
     .tip {
       margin-top:12px; padding:11px; border-radius:12px; border:1px solid rgba(255,209,102,.28);
       background:rgba(255,209,102,.08); color:#ffe7a8; font-size:12px; line-height:1.5;
@@ -81,7 +106,7 @@
     }
     @media (max-width: 900px) {
       .panel { width:220px; }
-      .panel.right { width:210px; }
+      .panel.right { width:240px; }
       .status { display:none; }
     }
     @media (max-width: 700px) {
@@ -152,6 +177,20 @@
     <button class="danger" id="reset">重置</button>
   </div>
 
+  <h3>任務挑戰</h3>
+  <label>學習主軸</label>
+  <select id="mission">
+    <option value="classroom">任務一：飛越教室</option>
+    <option value="hangtime">任務二：最長滯空時間</option>
+    <option value="rings">任務三：穿越風圈</option>
+    <option value="crosswind">任務四：對抗側風</option>
+    <option value="repair">任務五：修復問題飛機</option>
+  </select>
+  <div class="button-grid">
+    <button id="applyMission">套用任務</button>
+    <button id="nextMission">下一關</button>
+  </div>
+
   <h3>顯示</h3>
   <div class="toggle"><span>彩色氣流粒子</span><input id="showFlow" type="checkbox" checked></div>
   <div class="toggle"><span>受力箭頭</span><input id="showForces" type="checkbox" checked></div>
@@ -159,7 +198,21 @@
 </aside>
 
 <aside class="panel right">
-  <h2>即時觀察</h2>
+  <h2>學習任務</h2>
+  <div class="learning-card">
+    <b id="missionTitle">任務一：飛越教室</b>
+    <span id="missionGoal">讓紙飛機飛過 12 m，並避免高拋後失速。</span>
+    <div class="pill-row" id="missionTags"></div>
+  </div>
+  <div class="mission-result" id="missionResult">選擇任務後按「套用任務」，再投擲並觀察結果。</div>
+
+  <h3>現實案例</h3>
+  <div class="history-card">
+    <b id="historyTitle">萊特兄弟的風洞</b>
+    <span id="historyText">萊特兄弟在試飛前用小型風洞比較翼型，確認升力與控制面的效果，才逐步走向可控飛行。</span>
+  </div>
+
+  <h3>即時觀察</h3>
 
   <div class="metric"><span>相對空速</span><span id="mSpeed">8.00 m/s</span></div>
   <div class="metric"><span>升力</span><span id="mLift">0.00 N</span></div>
@@ -167,6 +220,8 @@
   <div class="metric"><span>高度</span><span id="mHeight">2.00 m</span></div>
   <div class="metric"><span>飛行距離</span><span id="mDistance">0.00 m</span></div>
   <div class="metric"><span>滯空時間</span><span id="mTime">0.00 s</span></div>
+  <div class="metric"><span>最大高度</span><span id="mMaxHeight">2.00 m</span></div>
+  <div class="metric"><span>左右偏移</span><span id="mOffset">0.00 m</span></div>
 
   <h3>氣流速度色階</h3>
   <div class="legend">
@@ -325,10 +380,17 @@ const trail = new THREE.Line(trailGeo,new THREE.LineBasicMaterial({color:0xffd16
 scene.add(trail);
 let trailCount=0;
 
+const ringGroup = new THREE.Group();
+const ringMat = new THREE.MeshBasicMaterial({ color:0xffd166, transparent:true, opacity:.76 });
+const ringDoneMat = new THREE.MeshBasicMaterial({ color:0x5ee7c4, transparent:true, opacity:.82 });
+scene.add(ringGroup);
+let missionRings = [];
+
 const ui = {};
 ['mode','planeType','wind','aoa','crosswind','span','cg','throwSpeed','showFlow','showForces','showTrail',
  'windV','aoaV','crosswindV','spanV','cgV','throwV','modeText','airSpeedTop','aoaTop',
- 'mSpeed','mLift','mDrag','mHeight','mDistance','mTime','stallWarning','tip',
+ 'mSpeed','mLift','mDrag','mHeight','mDistance','mTime','mMaxHeight','mOffset','stallWarning','tip',
+ 'mission','applyMission','nextMission','missionTitle','missionGoal','missionTags','missionResult','historyTitle','historyText',
  'launch','pause','slow','reset'].forEach(id=>ui[id]=document.getElementById(id));
 
 const params = {
@@ -338,8 +400,65 @@ const params = {
 
 let velocity = new THREE.Vector3();
 let flightTime=0, distance=0;
+let maxHeight=2.3, speedSum=0, dragSum=0, sampleCount=0, maxLift=0, maxOffset=0, stalledDuring=false;
+let previousResult = null;
+let activeMissionKey = 'classroom';
 const startPos = new THREE.Vector3(0,2.3,0);
 const clock = new THREE.Clock();
+
+const missions = {
+  classroom: {
+    title:'任務一：飛越教室',
+    goal:'飛過 12 m，最大高度低於 6 m，練習「不是拋越高就越遠」。',
+    tags:['攻角','阻力','穩定滑翔'],
+    historyTitle:'萊特兄弟的風洞',
+    history:'萊特兄弟在試飛前用小型風洞比較翼型，確認升力與控制面的效果。紙飛機也一樣：先測參數，再看飛行結果。',
+    settings:{ mode:'flight', planeType:'classic', wind:0.8, aoa:7, crosswind:0, span:1.08, cg:.08, throwSpeed:12 },
+    check:s=>s.distance>=12 && s.maxHeight<=6 && !s.stalledDuring,
+    feedback:s=>s.maxHeight>6 ? '飛得夠遠，但高度太高，可能浪費能量或接近失速。試著降低攻角或投擲速度。' : '目標是穩定穿越教室：距離要夠，路徑也不能像高拋球。'
+  },
+  hangtime: {
+    title:'任務二：最長滯空時間',
+    goal:'滯空超過 3.8 s，並保持穩定滑翔。',
+    tags:['翼面積','下降速度','能量效率'],
+    historyTitle:'伯努利與流速差',
+    history:'伯努利提出流體速度與壓力的關係，後來成為理解翼型周圍氣流的重要入口。這裡可觀察速度、升力與阻力如何一起影響滯空。',
+    settings:{ mode:'flight', planeType:'glider', wind:.5, aoa:8, crosswind:0, span:1.3, cg:.02, throwSpeed:9.5 },
+    check:s=>s.flightTime>=3.8 && s.distance>=7 && !s.stalledDuring,
+    feedback:s=>s.stalledDuring ? '攻角太大時會失速，滯空反而縮短。試著減小攻角，讓它滑翔而不是衝高。' : '滯空時間要靠升力、阻力與穩定性平衡，不一定靠最大投擲速度。'
+  },
+  rings: {
+    title:'任務三：穿越風圈',
+    goal:'依序穿過 3 個風圈，理解方向誤差會被距離放大。',
+    tags:['側風','路徑預測','偏移量'],
+    historyTitle:'風洞裡的可視化煙線',
+    history:'早期風洞常用煙線觀察氣流繞過模型的路徑。遊戲中的彩色粒子也扮演類似角色，幫你判斷紙飛機是否被側風帶偏。',
+    settings:{ mode:'flight', planeType:'dart', wind:1.2, aoa:6, crosswind:1.4, span:.95, cg:.12, throwSpeed:13 },
+    rings:[{x:8,y:2.4,z:.45,r:1.2},{x:15,y:2.0,z:1.1,r:1.2},{x:22,y:1.45,z:1.65,r:1.2}],
+    check:s=>s.ringsPassed>=3,
+    feedback:s=>`已穿過 ${s.ringsPassed}/3 個風圈。側風會讓微小方向差在遠處變成明顯偏移。`
+  },
+  crosswind: {
+    title:'任務四：對抗側風',
+    goal:'在固定側風下飛過 12 m，最大左右偏移低於 3.2 m。',
+    tags:['相對風','側向偏移','控制變因'],
+    historyTitle:'新幹線與車頭風阻',
+    history:'高速列車會用風洞與模擬降低阻力、噪音和隧道壓力波。紙飛機遇到側風時，也是在處理相對風與穩定性的問題。',
+    settings:{ mode:'flight', planeType:'classic', wind:2, aoa:6, crosswind:4.5, span:1.05, cg:.1, throwSpeed:12.5 },
+    check:s=>s.distance>=12 && s.maxOffset<=3.2,
+    feedback:s=>'目標在正前方時，不一定要朝正前方投擲。觀察偏移量，再用較小的改動補償側風。'
+  },
+  repair: {
+    title:'任務五：修復問題飛機',
+    goal:'這架飛機初始設定容易抬頭失速。調整到飛過 10 m、滯空 2 s 以上且不失速。',
+    tags:['重心','失速診斷','科學探究'],
+    historyTitle:'飛機試飛與問題診斷',
+    history:'真實試飛會從軌跡、姿態與受力資料找原因，再一次改少量變因。這關練習同樣流程：觀察、假設、修正、再測。',
+    settings:{ mode:'flight', planeType:'glider', wind:.6, aoa:18, crosswind:.4, span:1.22, cg:-.16, throwSpeed:10.5 },
+    check:s=>s.distance>=10 && s.flightTime>=2 && !s.stalledDuring && params.aoa<=12 && params.cg>=-.02,
+    feedback:s=>s.stalledDuring ? '這次仍出現失速。先把攻角降到 6 至 10 度附近，再把重心略往前。' : '穩定修復通常不是把速度拉滿，而是讓重心和攻角回到可控範圍。'
+  }
+};
 
 function rebuildPlane(){
   const oldPos=plane.position.clone(), oldRot=plane.rotation.clone();
@@ -347,6 +466,63 @@ function rebuildPlane(){
   plane = makePaperPlane(ui.planeType.value, params.span);
   plane.position.copy(oldPos); plane.rotation.copy(oldRot); plane.rotation.order='YXZ';
   scene.add(plane);
+}
+
+function setControl(id, value){
+  ui[id].value = value;
+}
+
+function clearRings(){
+  ringGroup.clear();
+  missionRings = [];
+}
+
+function buildRings(mission){
+  clearRings();
+  if(!mission.rings)return;
+  mission.rings.forEach((ring, index)=>{
+    const mesh = new THREE.Mesh(new THREE.TorusGeometry(ring.r, .035, 12, 80), ringMat.clone());
+    mesh.position.set(ring.x, ring.y, ring.z);
+    mesh.rotation.y = Math.PI / 2;
+    ringGroup.add(mesh);
+    missionRings.push({ ...ring, mesh, passed:false, index });
+  });
+}
+
+function currentMission(){
+  return missions[ui.mission.value] || missions.classroom;
+}
+
+function updateMissionPanel(){
+  const mission = currentMission();
+  ui.missionTitle.textContent = mission.title;
+  ui.missionGoal.textContent = mission.goal;
+  ui.historyTitle.textContent = mission.historyTitle;
+  ui.historyText.textContent = mission.history;
+  ui.missionTags.innerHTML = mission.tags.map(tag=>`<span class="pill">${tag}</span>`).join('');
+  if(!params.flying){
+    ui.missionResult.className = 'mission-result';
+    ui.missionResult.textContent = '按「套用任務」取得建議起始參數，再投擲並用數據比較結果。';
+  }
+}
+
+function applyMissionSettings(){
+  const mission = currentMission();
+  if(activeMissionKey !== ui.mission.value){
+    previousResult = null;
+    activeMissionKey = ui.mission.value;
+  }
+  Object.entries(mission.settings).forEach(([key,value])=>{
+    if(key === 'planeType') setControl('planeType', value);
+    else setControl(key, value);
+  });
+  updateUI();
+  rebuildPlane();
+  resetFlight();
+  buildRings(mission);
+  ui.missionResult.className = 'mission-result';
+  ui.missionResult.textContent = `${mission.title} 已套用。先預測會發生什麼，再按「投擲／開始」測試。`;
+  ui.tip.textContent = mission.goal;
 }
 
 function updateUI(){
@@ -372,11 +548,17 @@ function updateUI(){
   }
 }
 document.querySelectorAll('input,select').forEach(el=>el.addEventListener('input',()=>{
-  const oldSpan=params.span;
   updateUI();
   if(el===ui.span || el===ui.planeType) rebuildPlane();
+  if(el===ui.mission){
+    previousResult = null;
+    activeMissionKey = ui.mission.value;
+    updateMissionPanel();
+    buildRings(currentMission());
+  }
 }));
 updateUI();
+updateMissionPanel();
 
 function liftCoefficient(aoaDeg){
   const stall=15;
@@ -454,10 +636,73 @@ function updateFlow(dt, airspeed){
 
 function resetFlight(){
   params.flying=false; flightTime=0; distance=0; trailCount=0;
+  maxHeight=startPos.y; speedSum=0; dragSum=0; sampleCount=0; maxLift=0; maxOffset=0; stalledDuring=false;
   trailGeo.setDrawRange(0,0);
   plane.position.copy(startPos);
   plane.rotation.set(0,0,THREE.MathUtils.degToRad(params.aoa));
   velocity.set(0,0,0);
+  missionRings.forEach(ring=>{
+    ring.passed=false;
+    ring.mesh.material = ringMat.clone();
+  });
+}
+
+function collectStats(f, airspeed, aoaNow){
+  maxHeight=Math.max(maxHeight, plane.position.y);
+  maxOffset=Math.max(maxOffset, Math.abs(plane.position.z-startPos.z));
+  speedSum+=airspeed;
+  dragSum+=f.drag;
+  maxLift=Math.max(maxLift, f.lift);
+  sampleCount++;
+  if(aoaNow>15) stalledDuring=true;
+}
+
+function updateRingProgress(){
+  if(!missionRings.length || !params.flying)return;
+  missionRings.forEach(ring=>{
+    if(ring.passed)return;
+    const dy=plane.position.y-ring.y;
+    const dz=plane.position.z-ring.z;
+    const nearX=Math.abs(plane.position.x-ring.x)<.48;
+    if(nearX && Math.hypot(dy,dz)<=ring.r){
+      ring.passed=true;
+      ring.mesh.material = ringDoneMat.clone();
+    }
+  });
+}
+
+function snapshotResult(){
+  return {
+    distance,
+    flightTime,
+    maxHeight,
+    maxOffset,
+    maxLift,
+    avgSpeed: sampleCount ? speedSum/sampleCount : 0,
+    avgDrag: sampleCount ? dragSum/sampleCount : 0,
+    stalledDuring,
+    ringsPassed: missionRings.filter(r=>r.passed).length
+  };
+}
+
+function describeComparison(result){
+  if(!previousResult)return '這是本任務的第一次測試。下一次只改一個參數，會更容易找出原因。';
+  const deltaD=result.distance-previousResult.distance;
+  const deltaT=result.flightTime-previousResult.flightTime;
+  const distanceText=deltaD>=0 ? `距離增加 ${deltaD.toFixed(1)} m` : `距離減少 ${Math.abs(deltaD).toFixed(1)} m`;
+  const timeText=deltaT>=0 ? `滯空增加 ${deltaT.toFixed(1)} s` : `滯空減少 ${Math.abs(deltaT).toFixed(1)} s`;
+  return `和上次相比，${distanceText}，${timeText}。`;
+}
+
+function finishFlight(){
+  const mission = currentMission();
+  const result = snapshotResult();
+  const passed = mission.check(result);
+  const summary = `距離 ${result.distance.toFixed(1)} m，滯空 ${result.flightTime.toFixed(1)} s，最大高度 ${result.maxHeight.toFixed(1)} m，偏移 ${result.maxOffset.toFixed(1)} m。`;
+  ui.missionResult.className = `mission-result ${passed?'mission-pass':'mission-fail'}`;
+  ui.missionResult.textContent = `${passed?'任務成功。':'還沒達成。'}${summary} ${mission.feedback(result)} ${describeComparison(result)}`;
+  ui.tip.textContent = passed ? `${mission.title} 完成：試著挑戰下一關，或用控制變因再優化一次。` : mission.feedback(result);
+  previousResult = result;
 }
 ui.launch.onclick=()=>{
   updateUI();
@@ -469,12 +714,22 @@ ui.launch.onclick=()=>{
     params.flying=true;
     const a=THREE.MathUtils.degToRad(params.aoa);
     velocity.set(Math.cos(a)*params.throwSpeed, Math.sin(a)*params.throwSpeed, 0);
-    ui.tip.textContent='飛行中：觀察速度降低後，升力如何改變，以及側風如何讓航線偏移。';
+    ui.missionResult.className = 'mission-result';
+    ui.missionResult.textContent = '飛行中：觀察速度、受力、軌跡和任務目標是否一致。';
+    ui.tip.textContent=currentMission().goal;
   }
 };
 ui.pause.onclick=()=>{ params.paused=!params.paused; ui.pause.textContent=params.paused?'繼續':'暫停'; };
 ui.slow.onclick=()=>{ params.timeScale=params.timeScale===1?.25:1; ui.slow.textContent=params.timeScale===1?'慢動作 ×0.25':'恢復正常速度'; };
 ui.reset.onclick=resetFlight;
+ui.applyMission.onclick=applyMissionSettings;
+ui.nextMission.onclick=()=>{
+  const keys=Object.keys(missions);
+  const nextIndex=(keys.indexOf(ui.mission.value)+1)%keys.length;
+  ui.mission.value=keys[nextIndex];
+  updateMissionPanel();
+  applyMissionSettings();
+};
 
 function updateTrail(){
   trail.visible=ui.showTrail.checked;
@@ -535,12 +790,14 @@ function animate(){
 
     flightTime+=dt;
     distance=Math.max(distance,plane.position.x-startPos.x);
+    collectStats(f,airspeed,aoaNow);
+    updateRingProgress();
     updateTrail();
 
     if(plane.position.y<=.08 || plane.position.x>55 || flightTime>25){
       plane.position.y=Math.max(.08,plane.position.y);
       params.flying=false;
-      ui.tip.textContent=`飛行結束：距離 ${distance.toFixed(1)} m，滯空 ${flightTime.toFixed(1)} 秒。可改變一個條件後再比較。`;
+      finishFlight();
     }
   } else if(params.mode==='tunnel') {
     plane.rotation.z=THREE.MathUtils.degToRad(params.aoa);
@@ -562,6 +819,8 @@ function animate(){
   ui.mHeight.textContent=plane.position.y.toFixed(2)+' m';
   ui.mDistance.textContent=Math.max(0,distance).toFixed(2)+' m';
   ui.mTime.textContent=flightTime.toFixed(2)+' s';
+  ui.mMaxHeight.textContent=maxHeight.toFixed(2)+' m';
+  ui.mOffset.textContent=maxOffset.toFixed(2)+' m';
 
   renderer.render(scene,camera);
 }
