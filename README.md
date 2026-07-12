@@ -11,7 +11,7 @@
 部署完成後可透過 GitHub Pages 開啟：
 
 ```text
-https://chichingleetw.github.io/paper-plane-wind-tunnel/
+https://educatres.github.io/paper-plane-wind-tunnel/
 ```
 
 ## 專案特色
